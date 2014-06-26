@@ -183,22 +183,24 @@ def keygen_resource(exec_action)
   # avoid variable scoping issues in resource block
   fqdn, my_home = node['fqdn'], @my_home
 
-  e = execute "create ssh keypair for #{new_resource.username}" do
-    cwd       my_home
-    user      new_resource.username
-    command   <<-KEYGEN.gsub(/^ +/, '')
-      ssh-keygen -t dsa -f #{my_home}/.ssh/id_dsa -N '' \
-        -C '#{new_resource.username}@#{fqdn}-#{Time.now.strftime('%FT%T%z')}'
-      chmod 0600 #{my_home}/.ssh/id_dsa
-      chmod 0644 #{my_home}/.ssh/id_dsa.pub
-    KEYGEN
-    action    :nothing
+  if @ssh_keygen && exec_action == :create
+    home_ssh_dir_resource(exec_action)
+    e = execute "create ssh keypair for #{new_resource.username}" do
+      cwd       my_home
+      user      new_resource.username
+      command   <<-KEYGEN.gsub(/^ +/, '')
+        ssh-keygen -t dsa -f #{my_home}/.ssh/id_dsa -N '' \
+          -C '#{new_resource.username}@#{fqdn}-#{Time.now.strftime('%FT%T%z')}'
+        chmod 0600 #{my_home}/.ssh/id_dsa
+        chmod 0644 #{my_home}/.ssh/id_dsa.pub
+      KEYGEN
+      action    :nothing
 
-    creates   "#{my_home}/.ssh/id_dsa"
+      creates   "#{my_home}/.ssh/id_dsa"
+    end
+    e.run_action(:run)
+    new_resource.updated_by_last_action(true) if e.updated_by_last_action?
   end
-  home_ssh_dir_resource(exec_action)
-  e.run_action(:run) if @ssh_keygen && exec_action == :create
-  new_resource.updated_by_last_action(true) if e.updated_by_last_action?
 
   if exec_action == :delete then
     ["#{@my_home}/.ssh/id_dsa", "#{@my_home}/.ssh/id_dsa.pub"].each do |keyfile|
